@@ -785,14 +785,23 @@ void handle_server_connection(int socket, uint32_t src_ip, uint32_t dest_ip) {
 
     while (true) {
 
-        while ((packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip,dest_ip)) != SUCCESS) {
+        memset(message_buffer,0,4096);
+        memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
+
+        packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip);
+        if (packets_received == ERROR) {
+            fprintf(stderr, "Error occurred while receiving packets.\n");
+            break;
         }
+
         printf("Success!");
+
         fgets(message_buffer, PAYLOAD_SIZE, 0);
 
         if(strcmp(&message_buffer[0],"]")){
             send_oob_data(socket,']',src_ip,dest_ip);
         }
+
         packets_filled = packetize_data(packets, message_buffer, MAX_PACKET_COLLECTION, src_ip, dest_ip);
 
         if(packets_filled == ERROR){
@@ -800,15 +809,6 @@ void handle_server_connection(int socket, uint32_t src_ip, uint32_t dest_ip) {
             break;
         }
 
-        // Receive echoed message
-        memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
-        packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip);
-        if (packets_received == ERROR) {
-            fprintf(stderr, "Error occurred while receiving packets.\n");
-            break;
-        }
-
-        // Echo the received message back to the client
         failed_packets = send_packet_collection(socket, packets_received, received_packets, failed_packet_seq);
         if (failed_packets != SUCCESS) {
             fprintf(stderr, "Error occurred while sending echoed packets.\n");
