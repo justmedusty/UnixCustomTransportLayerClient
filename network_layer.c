@@ -1,6 +1,3 @@
-//
-// Created by dustyn on 4/22/24.
-//
 
 #include "network_layer.h"
 
@@ -55,7 +52,7 @@ unsigned short checksum(void *b, int len) {
  * In the end, we will fill in our ip_header checksum for verification of the IP header at layer 3.
  */
 
-uint16_t fill_ip_header(struct iphdr *ip_header, char *src_ip, char *dst_ip) {
+uint16_t fill_ip_header(struct iphdr *ip_header, uint32_t src_ip, uint32_t dst_ip) {
     ip_header->ihl = 5; // Header length (in 32-bit words)
     ip_header->version = 4; // IPv4
     ip_header->check = 0; //set checksum to 0 first
@@ -66,8 +63,8 @@ uint16_t fill_ip_header(struct iphdr *ip_header, char *src_ip, char *dst_ip) {
     ip_header->ttl = 64; // Time to live
     ip_header->protocol = IPPROTO_RAW; // Protocol
     ip_header->check = 0; // Checksum (0 for now, will be calculated later)
-    ip_header->saddr = inet_addr(src_ip); // Source IP address
-    ip_header->daddr = inet_addr(dst_ip); // Destination IP address
+    ip_header->saddr = src_ip; // Source IP address
+    ip_header->daddr = dst_ip; // Destination IP address
 
     if(ip_header->saddr == INADDR_ANY|| ip_header->daddr == INADDR_ANY ){
         perror("inet_addr");
@@ -75,6 +72,8 @@ uint16_t fill_ip_header(struct iphdr *ip_header, char *src_ip, char *dst_ip) {
     }
 
     ip_header->check = checksum(ip_header, sizeof(struct iphdr));
+
+    get_ip_header_wire_ready(ip_header);
 
     return SUCCESS;
 
