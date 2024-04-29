@@ -69,7 +69,7 @@ uint8_t compare_checksum(char data[], size_t length, uint16_t received_checksum)
 
 uint16_t calculate_checksum(char *data[], size_t length);
 
-void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip);
+void handle_server_connection(int socket, uint32_t src_ip, uint32_t dest_ip);
 
 uint16_t send_resend(int socket, uint16_t sequence, uint32_t src_ip, uint32_t dst_ip);
 
