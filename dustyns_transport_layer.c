@@ -655,7 +655,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
     struct sockaddr_in dest_addr;
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Set the destination IP address here// Set the destination port here
+    dest_addr.sin_addr.s_addr = inet_addr("192.168.68.64"); // Set the destination IP address here
 
     for (int i = 0; i < num_packets; i++) {
         struct msghdr msg_hdr;

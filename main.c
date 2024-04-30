@@ -12,7 +12,7 @@ int main() {
     ssize_t recv_len;
 
     // Create a raw socket for ICMP packets
-    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) == -1) {
+    if ((sockfd = socket(AF_INET, SOCK_RAW, IP_HDRINCL)) == -1) {
         perror("socket");
         exit(EXIT_FAILURE);
     }
