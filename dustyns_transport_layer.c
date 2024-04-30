@@ -649,7 +649,7 @@ void get_transport_packet_host_ready(struct iovec iov[3]) {
  */
 
 
-uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[PACKET_SIZE], uint16_t pid) {
+uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[PACKET_SIZE], uint16_t pid,uint32_t src_ip, uint32_t dest_ip) {
     memset(failed_packet_seq, 0, PACKET_SIZE);
     int failed_packets = 0;
 
@@ -657,15 +657,21 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
     struct sockaddr_in dest_addr;
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Set the destination IP address here
+    dest_addr.sin_addr.s_addr = inet_addr("192.168.68.59"); // Set the destination IP address here
 
     for (int i = 0; i < num_packets; i++) {
         struct msghdr msg_hdr;
         memset(&msg_hdr, 0, sizeof(msg_hdr));
 
+        struct iphdr ip_hdr;
+        if (fill_ip_header(&ip_hdr, src_ip, dest_ip) != SUCCESS){
+            fprintf(stderr,"Err filling ip hdr\n");
+            exit(EXIT_FAILURE);
+        }
+
         // Set the destination address in the msghdr
         msg_hdr.msg_name = &dest_addr;
-        msg_hdr.msg_namelen = sizeof(dest_addr);
+        msg_hdr.msg_namelen = sizeof (struct iphdr);
 
         // Populate msghdr
         msg_hdr.msg_iov = packets[i]->iov;
@@ -721,6 +727,7 @@ uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16
 
     while (recvmsg(socket, &msg, 0) != 0) {
         fprintf(stdout,"Receiving msg\n");
+        allocate_packet(&receiving_packet_list[packets_received]);
 
         ip_hdr = receiving_packet_list[i]->iov[0].iov_base;
         head = receiving_packet_list[i]->iov[1].iov_base;
@@ -862,20 +869,20 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
 
         strcpy(msg_buff,"greagaertsdghsrathsrtyhrwthwrtyhwrthrwthrwstyhrwthwrthwrthwrtyhwrth");
 
-        if ((packets_made = packetize_data(&packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
+        if ((packets_made = packetize_data(packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
             exit(EXIT_FAILURE);
         }
 
         // Echo the received message back to the client
-        failed_packets = send_packet_collection(socket, 1, packets, failed_packet_seq,pid);
+        failed_packets = send_packet_collection(socket, 1, packets, failed_packet_seq,pid,src_ip, inet_addr("127.0.0.1"));
         if (failed_packets != SUCCESS) {
             fprintf(stderr, "Error occurred while sending echoed packets.\n");
             goto cleanup;
         }
 
 
-
+/*
         // Receive echoed message
         memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
         packets_received = receive_data_packets(&received_packets[0], socket, failed_packet_seq, src_ip, dest_ip,pid);
@@ -883,6 +890,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
             fprintf(stderr, "Error occurred while receiving packets.\n");
             goto cleanup;
         }
+        */
 
 
 
