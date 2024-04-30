@@ -3,4 +3,5 @@ project(UnixCustomTransportLayerClient C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(UnixCustomTransportLayerClient main.c)
+add_executable(UnixCustomTransportLayerClient main.c
+        dustyns_transport_layer.c network_layer.c)
