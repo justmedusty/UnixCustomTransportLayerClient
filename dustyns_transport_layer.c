@@ -26,65 +26,73 @@
 uint16_t num_timeouts;
 char oob_data;
 
-uint16_t allocate_packet(Packet *packet) {
-    packet = malloc(sizeof(Packet));
+uint16_t allocate_packet(Packet **packet_ptr) {
+    *packet_ptr = malloc(sizeof(Packet)); // Assign allocated memory to the pointer via dereferencing
 
-    if (packet == NULL) {
+    if (*packet_ptr == NULL) {
         perror("malloc");
         return ERROR;
     }
-    packet->iov[0].iov_base = malloc(sizeof(struct iphdr));
-    packet->iov[0].iov_len = sizeof(struct iphdr);
-    packet->iov[1].iov_base = malloc(HEADER_SIZE);
-    packet->iov[1].iov_len = HEADER_SIZE;
-    packet->iov[2].iov_base = malloc(PAYLOAD_SIZE);
-    packet->iov[2].iov_len = PAYLOAD_SIZE;
+    // Access and initialize the allocated memory through the dereferenced pointer
+    (*packet_ptr)->iov[0].iov_base = malloc(sizeof(struct iphdr));
+    (*packet_ptr)->iov[0].iov_len = sizeof(struct iphdr);
+    (*packet_ptr)->iov[1].iov_base = malloc(HEADER_SIZE);
+    (*packet_ptr)->iov[1].iov_len = HEADER_SIZE;
+    (*packet_ptr)->iov[2].iov_base = malloc(PAYLOAD_SIZE);
+    (*packet_ptr)->iov[2].iov_len = PAYLOAD_SIZE;
 
     /*
      * We're going to clear this memory space and set 0s across the board
      * to avoid any funny business.
      */
-    memset(packet->iov[0].iov_base, 0, sizeof(struct iphdr));
-    memset(packet->iov[1].iov_base, 0, HEADER_SIZE);
-    memset(packet->iov[2].iov_base, 0, PAYLOAD_SIZE);
+    memset((*packet_ptr)->iov[0].iov_base, 0, sizeof(struct iphdr));
+    memset((*packet_ptr)->iov[1].iov_base, 0, HEADER_SIZE);
+    memset((*packet_ptr)->iov[2].iov_base, 0, PAYLOAD_SIZE);
 
 
-    if (packet->iov[0].iov_base == NULL || packet->iov[1].iov_base == NULL || packet->iov[2].iov_base == NULL) {
+    if ((*packet_ptr)->iov[0].iov_base == NULL || (*packet_ptr)->iov[1].iov_base == NULL || (*packet_ptr)->iov[2].iov_base == NULL) {
         perror("malloc");
-        free_packet(packet);
+        free_packet(*packet_ptr);
         return ERROR;
     }
 
     return SUCCESS;
-
 }
+
 
 /*
  * Free packet from heap memory, check that it is not null to avoid dereferencing a null pointer, set each packet to null afterwards
  * to make sure there are no double frees.
  */
-uint16_t free_packet(Packet *packet) {
-    if (packet == NULL) {
+uint16_t free_packet(Packet **packet) {
+    if (packet == NULL || *packet == NULL) {
         return ERROR;
     }
-    if (packet->iov[0].iov_base != NULL) {
-        free(packet->iov[0].iov_base);
-        packet->iov[0].iov_base = NULL;
+
+    // Free memory allocated for iov[0]
+    if ((*packet)->iov[0].iov_base != NULL) {
+        free((*packet)->iov[0].iov_base);
+        (*packet)->iov[0].iov_base = NULL;
     }
 
-    if (packet->iov[1].iov_base != NULL) {
-        free(packet->iov[1].iov_base);
-        packet->iov[1].iov_base = NULL;
+    // Free memory allocated for iov[1]
+    if ((*packet)->iov[1].iov_base != NULL) {
+        free((*packet)->iov[1].iov_base);
+        (*packet)->iov[1].iov_base = NULL;
     }
 
-    if (packet->iov[2].iov_base != NULL) {
-        free(packet->iov[2].iov_base);
-        packet->iov[2].iov_base = NULL;
+    // Free memory allocated for iov[2]
+    if ((*packet)->iov[2].iov_base != NULL) {
+        free((*packet)->iov[2].iov_base);
+        (*packet)->iov[2].iov_base = NULL;
     }
 
-    free(packet);
+    // Free memory allocated for the Packet structure
+    free(*packet);
+    *packet = NULL; // Set pointer to NULL after freeing memory
     return SUCCESS;
 }
+
 
 /*
  * I'm making up words here I know, deal with it. this will take your data buffer and your
@@ -94,7 +102,7 @@ uint16_t free_packet(Packet *packet) {
  *
  */
 uint16_t
-packetize_data(Packet packet[], char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
+packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
 
     //Check they are not passing a packet array larger than the max
     if (packet_array_len > MAX_PACKET_COLLECTION) {
@@ -127,6 +135,8 @@ packetize_data(Packet packet[], char data_buff[], uint16_t packet_array_len, uin
             exit(EXIT_FAILURE);
         }
 
+        printf("%d\n",ip_hdr.daddr);
+
 
 
 
@@ -138,22 +148,22 @@ packetize_data(Packet packet[], char data_buff[], uint16_t packet_array_len, uin
         size_t bytes_to_copy = remaining_bytes > PAYLOAD_SIZE ? PAYLOAD_SIZE : remaining_bytes;
         memcpy(packet_buff, data_buff + (source_length - remaining_bytes), bytes_to_copy);
         // segfault mania  memcpy(packet[i].iov[2].iov_base, packet_buff, bytes_to_copy);
-        packet[i].iov[2].iov_base = packet_buff;
+        packet[i]->iov[2].iov_base = packet_buff;
         remaining_bytes -= bytes_to_copy;
 
         Header header = {
                 DATA,
-                calculate_checksum(packet[i].iov[2].iov_base, bytes_to_copy),
+                calculate_checksum(packet[i]->iov[2].iov_base, bytes_to_copy),
                 i,
                 sizeof bytes_to_copy,
                 pid
         };
 
 
-        packet[i].iov[1].iov_base = &header;
+        packet[i]->iov[1].iov_base = &header;
 
 
-        packets_filled = i;
+        packets_filled = i + 1;
 
 
     }
@@ -170,14 +180,14 @@ packetize_data(Packet packet[], char data_buff[], uint16_t packet_array_len, uin
  * We will use strcat since it handles null termination for us, memcpy doesnt. This will change I will
  * come back to this later.
  */
-uint16_t dump_packet_collection_payload_into_buffer(Packet packet[], char data_buff[], uint64_t buff_size,uint16_t packet_array_len) {
+uint16_t dump_packet_collection_payload_into_buffer(Packet *packet[], char data_buff[], uint64_t buff_size,uint16_t packet_array_len) {
 
     uint64_t buffer_max = 0;
 
     for (int i = 0; i < packet_array_len; i++) {
 
-        strcat(data_buff, packet[i].iov[2].iov_base);
-        buff_size += strlen(packet[i].iov[2].iov_base);
+        strcat(data_buff, packet[i]->iov[2].iov_base);
+        buff_size += strlen(packet[i]->iov[2].iov_base);
 
         if (buffer_max >= (buff_size - 256)) {
             return NO_BUFFER_SPACE;
@@ -306,7 +316,7 @@ uint8_t compare_checksum(char data[], size_t length, uint16_t received_checksum)
  * Also sending out RESEND messages to the other side with the packet sequence number that will need to be sent back.
  */
 
-uint16_t handle_ack(int socket, Packet *packets, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
+uint16_t handle_ack(int socket, Packet **packets, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
 
     bool sequence_received[MAX_PACKET_COLLECTION + 1] = {false}; // Initialize all to false
     int last_received = -1;
@@ -315,17 +325,17 @@ uint16_t handle_ack(int socket, Packet *packets, uint32_t src_ip, uint32_t dest_
 
     // Iterate through each packet in the collection
     for (int i = 0; i < MAX_PACKET_COLLECTION; ++i) {
-        Packet *packet = &packets[i];
+        Packet *packet = packets[i];
 
         if (packet == NULL) break;
 
-        struct iphdr ip_hdr = *(struct iphdr *) packet->iov[0].iov_base;
+        struct iphdr *ip_hdr = (struct iphdr *)packet->iov[0].iov_base;
 
-        if (ip_hdr.saddr != src_ip) {
+        if (ip_hdr->saddr != src_ip) {
             continue;
         }
 
-        Header *header = (Header *) packet->iov[1].iov_base;
+        Header *header = (Header *)packet->iov[1].iov_base;
 
         sequence_received[header->sequence] = true;
 
@@ -364,7 +374,7 @@ uint16_t handle_ack(int socket, Packet *packets, uint32_t src_ip, uint32_t dest_
  */
 uint16_t send_ack(int socket, uint16_t max_sequence, uint32_t src, uint32_t dest,uint16_t pid) {
 
-    Packet packet;
+    Packet *packet;
 
     allocate_packet(&packet);
 
@@ -379,12 +389,12 @@ uint16_t send_ack(int socket, uint16_t max_sequence, uint32_t src, uint32_t dest
     };
 
     fill_ip_header(&ip_hdr, src, dest);
-    packet.iov[0].iov_base = &ip_hdr;
-    packet.iov[1].iov_base = &header;
+    packet->iov[0].iov_base = &ip_hdr;
+    packet->iov[1].iov_base = &header;
 
     struct msghdr message;
     memset(&message, 0, sizeof(message));
-    message.msg_iov = packet.iov;
+    message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
@@ -487,18 +497,18 @@ uint16_t handle_corruption(int socket, uint32_t src_ip, uint32_t dst_ip, uint16_
  * sent.
  */
 
-uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_packets, Packet *packet_collection,uint16_t pid) {
+uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_packets, Packet **packet_collection,uint16_t pid) {
 
 
     for (int i = 0; i < num_packets; i++) {
 
         Header header;
-        header = *((Header *) packet_collection[*sequence[i]].iov[1].iov_base);
+        header = *((Header *) packet_collection[*sequence[i]]->iov[1].iov_base);
         header.status = SECOND_SEND;
-        packet_collection[*sequence[i]].iov[1].iov_base = &header;
+        packet_collection[*sequence[i]]->iov[1].iov_base = &header;
         struct msghdr message;
         memset(&message, 0, sizeof(message));
-        message.msg_iov = packet_collection[*sequence[i]].iov;
+        message.msg_iov = packet_collection[*sequence[i]]->iov;
         message.msg_iovlen = 3;
 
         ssize_t bytes_sent = sendmsg(socket, &message, 0);
@@ -519,7 +529,7 @@ uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_pac
  */
 uint16_t send_oob_data(int socket, char oob_char, uint32_t src_ip, uint32_t dst_ip,uint16_t pid) {
 
-    Packet packet;
+    Packet *packet;
     allocate_packet(&packet);
     struct iphdr ip_hdr;
     Header header = {
@@ -532,14 +542,14 @@ uint16_t send_oob_data(int socket, char oob_char, uint32_t src_ip, uint32_t dst_
 
     fill_ip_header(&ip_hdr, src_ip, dst_ip);
 
-    packet.iov[0].iov_base = &ip_hdr;
-    packet.iov[1].iov_base = &header;
-    packet.iov[2].iov_base = &oob_char;
-    packet.iov[2].iov_len = OUT_OF_BAND_DATA_SIZE;
+    packet->iov[0].iov_base = &ip_hdr;
+    packet->iov[1].iov_base = &header;
+    packet->iov[2].iov_base = &oob_char;
+    packet->iov[2].iov_len = OUT_OF_BAND_DATA_SIZE;
 
     struct msghdr message;
     memset(&message, 0, sizeof(message));
-    message.msg_iov = packet.iov;
+    message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
@@ -638,7 +648,7 @@ void get_transport_packet_host_ready(struct iovec iov[3]) {
 
 
 uint16_t
-send_packet_collection(int socket, uint16_t num_packets, Packet packets[], uint16_t failed_packet_seq[PACKET_SIZE],uint16_t pid) {
+send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[PACKET_SIZE],uint16_t pid) {
 
     memset(failed_packet_seq, 0, PACKET_SIZE);
     int failed_packets = 0;
@@ -647,8 +657,11 @@ send_packet_collection(int socket, uint16_t num_packets, Packet packets[], uint1
         memset(&msg_hdr, 0, sizeof(msg_hdr));
 
         // Populate msghdr
-        msg_hdr.msg_iov = packets[i].iov;
+        msg_hdr.msg_iov = packets[i]->iov;
         msg_hdr.msg_iovlen = 3; // Number of iovs
+        struct iphdr ip_hdr = *(struct iphdr *) packets[i]->iov[0].iov_base;
+        printf("%d\n",ip_hdr.daddr);
+        fflush(stdout);
         if (sendmsg(socket, &msg_hdr, 0) == -1) {
             perror("sendmsg");
             failed_packets++;
@@ -821,7 +834,7 @@ void sig_int_handler() {
  *
  */
 void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
-    Packet packets[MAX_PACKET_COLLECTION];
+    Packet *packets[MAX_PACKET_COLLECTION];
     Packet received_packets[MAX_PACKET_COLLECTION];
 
     char msg_buff[4096];
@@ -861,7 +874,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
 
         // Receive echoed message
         memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
-        uint16_t packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip,pid);
+        packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip,pid);
         if (packets_received == ERROR) {
             fprintf(stderr, "Error occurred while receiving packets.\n");
             goto cleanup;
