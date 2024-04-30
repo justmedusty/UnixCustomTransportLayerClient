@@ -52,10 +52,9 @@ uint16_t allocate_packet(Packet **packet_ptr) {
 
     if ((*packet_ptr)->iov[0].iov_base == NULL || (*packet_ptr)->iov[1].iov_base == NULL || (*packet_ptr)->iov[2].iov_base == NULL) {
         perror("malloc");
-        free_packet(packet_ptr);
+        free_packet(*packet_ptr);
         return ERROR;
     }
-
     return SUCCESS;
 }
 
@@ -64,32 +63,32 @@ uint16_t allocate_packet(Packet **packet_ptr) {
  * Free packet from heap memory, check that it is not null to avoid dereferencing a null pointer, set each packet to null afterwards
  * to make sure there are no double frees.
  */
-uint16_t free_packet(Packet **packet) {
-    if (packet == NULL || *packet == NULL) {
+uint16_t free_packet(Packet *packet) {
+    if (packet == NULL) {
         return ERROR;
     }
 
     // Free memory allocated for iov[0]
-    if ((*packet)->iov[0].iov_base != NULL) {
-        free((*packet)->iov[0].iov_base);
-        (*packet)->iov[0].iov_base = NULL;
+    if ((*packet).iov[0].iov_base != NULL) {
+        free((*packet).iov[0].iov_base);
+        (*packet).iov[0].iov_base = NULL;
     }
 
     // Free memory allocated for iov[1]
-    if ((*packet)->iov[1].iov_base != NULL) {
-        free((*packet)->iov[1].iov_base);
-        (*packet)->iov[1].iov_base = NULL;
+    if ((*packet).iov[1].iov_base != NULL) {
+        free((*packet).iov[1].iov_base);
+        (*packet).iov[1].iov_base = NULL;
     }
 
     // Free memory allocated for iov[2]
-    if ((*packet)->iov[2].iov_base != NULL) {
-        free((*packet)->iov[2].iov_base);
-        (*packet)->iov[2].iov_base = NULL;
+    if ((*packet).iov[2].iov_base != NULL) {
+        free((*packet).iov[2].iov_base);
+        (*packet).iov[2].iov_base = NULL;
     }
 
     // Free memory allocated for the Packet structure
-    free(*packet);
-    *packet = NULL; // Set pointer to NULL after freeing memory
+    free(packet);
+    packet = NULL; // Set pointer to NULL after freeing memory
     return SUCCESS;
 }
 
@@ -102,7 +101,7 @@ uint16_t free_packet(Packet **packet) {
  *
  */
 uint16_t
-packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
+packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
 
     //Check they are not passing a packet array larger than the max
     if (packet_array_len > MAX_PACKET_COLLECTION) {
@@ -124,6 +123,7 @@ packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, ui
 
 
     for (int i = 0; i < packet_array_len; ++i) {
+        allocate_packet(&packet[i]);
 
         char packet_buff[PAYLOAD_SIZE];
 
@@ -136,6 +136,8 @@ packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, ui
         }
 
         printf("%d\n",ip_hdr.daddr);
+        printf("%d\n",ip_hdr.check);
+        printf("%d\n",ip_hdr.protocol);
 
 
 
@@ -655,7 +657,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
     struct sockaddr_in dest_addr;
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_addr.s_addr = inet_addr("192.168.68.64"); // Set the destination IP address here
+    dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Set the destination IP address here
 
     for (int i = 0; i < num_packets; i++) {
         struct msghdr msg_hdr;
@@ -846,9 +848,6 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     signal(SIGINT, sig_int_handler);
     signal(SIGALRM, sigalrm_handler);
 
-    for(int i = 0;i<MAX_PACKET_COLLECTION;i++){
-        allocate_packet(&packets[i]);
-    }
 
     uint16_t packets_filled= 0;
 
@@ -863,7 +862,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
 
         strcpy(msg_buff,"greagaertsdghsrathsrtyhrwthwrtyhwrthrwthrwstyhrwthwrthwrthwrtyhwrth");
 
-        if ((packets_made = packetize_data(packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
+        if ((packets_made = packetize_data(&packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
             exit(EXIT_FAILURE);
         }
@@ -900,8 +899,8 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
 
     // Clean up allocated memory
     for (int i = 0; i < MAX_PACKET_COLLECTION; i++) {
-        free_packet(&packets[i]);
-        free_packet(&received_packets[i]);
+        free_packet(packets[i]);
+        free_packet(received_packets[i]);
     }
     close(socket);
 

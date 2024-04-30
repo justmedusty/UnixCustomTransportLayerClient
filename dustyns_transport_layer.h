@@ -65,7 +65,7 @@ uint16_t handle_ack(int socket, Packet **packets, uint32_t src_ip, uint32_t dest
 
 uint16_t allocate_packet(Packet **packet_ptr);
 
-        uint16_t free_packet(Packet **packet);
+uint16_t free_packet(Packet *packet);
 
 uint8_t compare_checksum(char data[], size_t length, uint16_t received_checksum);
 
