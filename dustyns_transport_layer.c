@@ -117,7 +117,6 @@ packetize_data(Packet packet[], char data_buff[], uint16_t packet_array_len, uin
 
     for (int i = 0; i < packet_array_len; ++i) {
 
-        fprintf(stderr,"%d\n",i);
         char packet_buff[PAYLOAD_SIZE];
 
         size_t bytes_copied;
@@ -651,6 +650,7 @@ send_packet_collection(int socket, uint16_t num_packets, Packet packets[], uint1
         msg_hdr.msg_iov = packets[i].iov;
         msg_hdr.msg_iovlen = 3; // Number of iovs
         if (sendmsg(socket, &msg_hdr, 0) == -1) {
+            perror("sendmsg");
             failed_packets++;
             /*
              * We want to be able to go through after and resend.
@@ -773,6 +773,7 @@ uint16_t receive_data_packets(Packet *receiving_packet_list, int socket, uint16_
                     break;
 
                 case DATA:
+                    printf("DATA\n");
                     if (compare_checksum(data, head->msg_size, head->checksum) != SUCCESS) {
                         memset(&receiving_packet_list[head->sequence], 0, sizeof(Packet));
                         handle_corruption(socket, src_ip, dst_ip, head->sequence,pid);
@@ -823,6 +824,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     Packet packets[MAX_PACKET_COLLECTION];
     Packet received_packets[MAX_PACKET_COLLECTION];
 
+    char msg_buff[4096];
     signal(SIGINT, sig_int_handler);
     signal(SIGALRM, sigalrm_handler);
 
@@ -830,27 +832,32 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
         allocate_packet(&packets[i]);
     }
 
-    // Prepare welcome message
-    const char welcome_msg[] = "Welcome to the raw socket server!";
-
-
-    uint16_t packets_filled = packetize_data(packets, (char *) welcome_msg, 1, src_ip, dest_ip,pid);
-    if (packets_filled == ERROR) {
-        fprintf(stderr, "Error occurred while packetizing data.\n");
-        goto cleanup;
-    }
-
-
+    uint16_t packets_filled= 0;
 
     // Packetize and send welcome message
     uint16_t failed_packet_seq[MAX_PACKET_COLLECTION];
-    uint16_t failed_packets = send_packet_collection(socket, packets_filled, packets, failed_packet_seq,pid);
-    if (failed_packets != SUCCESS) {
-        fprintf(stderr, "Error occurred while sending packets.\n");
-        goto cleanup;
-    }
+
+    uint16_t failed_packets = 0;
+    uint16_t packets_received = 0;
+    uint16_t packets_made = 0;
 
     while (true) {
+
+        strcpy(msg_buff,"greagaertsdghsrathsrtyhrwthwrtyhwrthrwthrwstyhrwthwrthwrthwrtyhwrth");
+
+        if ((packets_made = packetize_data(packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
+            fprintf(stderr,"ERROR PACKETIZING\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Echo the received message back to the client
+        failed_packets = send_packet_collection(socket, 1, packets, failed_packet_seq,pid);
+        if (failed_packets != SUCCESS) {
+            fprintf(stderr, "Error occurred while sending echoed packets.\n");
+            goto cleanup;
+        }
+
+
 
         // Receive echoed message
         memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
@@ -860,12 +867,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
             goto cleanup;
         }
 
-        // Echo the received message back to the client
-        failed_packets = send_packet_collection(socket, packets_received, received_packets, failed_packet_seq,pid);
-        if (failed_packets != SUCCESS) {
-            fprintf(stderr, "Error occurred while sending echoed packets.\n");
-            goto cleanup;
-        }
+
 
     }
 
