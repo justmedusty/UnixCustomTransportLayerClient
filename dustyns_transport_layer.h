@@ -95,7 +95,7 @@ void get_transport_packet_wire_ready(struct iovec iov[3]);
 
 uint16_t send_oob_data(int socket, char oob_char, uint32_t src_ip, uint32_t dst_ip,uint16_t pid);
 
-uint16_t receive_data_packets(Packet *receiving_packet_list, int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip,uint16_t pid);
+uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip,uint16_t pid);
 
 uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[MAX_PACKET_COLLECTION],uint16_t pid);
 
