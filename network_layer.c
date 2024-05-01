@@ -53,6 +53,7 @@ unsigned short checksum(void *b, int len) {
  */
 
 uint16_t fill_ip_header(struct iphdr *ip_header, uint32_t src_ip, uint32_t dst_ip) {
+
     ip_header->ihl = 5; // Header length (in 32-bit words)
     ip_header->version = 4; // IPv4
     ip_header->check = 0; //set checksum to 0 first
@@ -73,7 +74,7 @@ uint16_t fill_ip_header(struct iphdr *ip_header, uint32_t src_ip, uint32_t dst_i
 
     ip_header->check = checksum(ip_header, sizeof(struct iphdr));
 
-    get_ip_header_wire_ready(ip_header);
+    //get_ip_header_wire_ready(ip_header);
 
     return SUCCESS;
 
