@@ -161,8 +161,8 @@ packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uin
                 pid
         };
 
+        memcpy(packet[i]->iov[1].iov_base,&header, HEADER_SIZE);
 
-        packet[i]->iov[1].iov_base = &header;
 
 
         packets_filled = i + 1;
@@ -571,7 +571,7 @@ uint16_t send_oob_data(int socket, char oob_char, uint32_t src_ip, uint32_t dst_
  */
 uint16_t handle_close(int socket, uint32_t src_ip, uint32_t dst_ip,uint16_t pid) {
 
-    Packet packet;
+    Packet *packet;
     allocate_packet(&packet);
     struct iphdr ip_hdr;
 
@@ -586,12 +586,12 @@ uint16_t handle_close(int socket, uint32_t src_ip, uint32_t dst_ip,uint16_t pid)
 
     fill_ip_header(&ip_hdr, src_ip, dst_ip);
 
-    packet.iov[0].iov_base = &ip_hdr;
-    packet.iov[1].iov_base = &header;
+    packet->iov[0].iov_base = &ip_hdr;
+    packet->iov[1].iov_base = &header;
 
     struct msghdr message;
     memset(&message, 0, sizeof(message));
-    message.msg_iov = packet.iov;
+    message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
@@ -657,7 +657,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
     struct sockaddr_in dest_addr;
     memset(&dest_addr, 0, sizeof(dest_addr));
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_addr.s_addr = inet_addr("192.168.68.59"); // Set the destination IP address here
+    dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Set the destination IP address here
 
     for (int i = 0; i < num_packets; i++) {
         struct msghdr msg_hdr;
@@ -671,11 +671,14 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
 
         // Set the destination address in the msghdr
         msg_hdr.msg_name = &dest_addr;
-        msg_hdr.msg_namelen = sizeof (struct iphdr);
+        msg_hdr.msg_namelen = sizeof (struct sockaddr_in);
 
         // Populate msghdr
         msg_hdr.msg_iov = packets[i]->iov;
+        msg_hdr.msg_iov[1] = packets[i]->iov[1];
+        msg_hdr.msg_iov[2] = packets[i]->iov[2];
         msg_hdr.msg_iovlen = 3; // Number of iovs
+        Header *head = packets[i]->iov[1].iov_base;
 
         // Send the packet
         if (sendmsg(socket, &msg_hdr, 0) == -1) {
@@ -867,7 +870,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
 
     while (true) {
 
-        strcpy(msg_buff,"greagaertsdghsrathsrtyhrwthwrtyhwrthrwthrwstyhrwthwrthwrthwrtyhwrth");
+        strcpy(msg_buff,"hellothisisatestpacketofsomeinfo\0");
 
         if ((packets_made = packetize_data(packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
@@ -880,6 +883,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
             fprintf(stderr, "Error occurred while sending echoed packets.\n");
             goto cleanup;
         }
+        sleep(5);
 
 
 /*
