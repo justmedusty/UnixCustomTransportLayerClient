@@ -453,6 +453,7 @@ uint16_t send_resend(int socket, uint16_t sequence, uint32_t src_ip, uint32_t ds
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
 
     if (bytes_sent < 0) {
+        perror("sendmsg");
         return ERROR;
     } else {
         return header.sequence;
@@ -531,6 +532,12 @@ uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_pac
         packet_collection[*sequence[i]]->iov[1].iov_base = &header;
         struct msghdr message;
         memset(&message, 0, sizeof(message));
+        struct sockaddr_in destination;
+        memset(&destination, 0, sizeof(destination));
+        destination.sin_family = AF_INET;
+        destination.sin_addr.s_addr = inet_addr("127.0.0.1");
+        message.msg_name = &destination;
+        message.msg_namelen = sizeof(struct sockaddr_in);
         message.msg_iov = packet_collection[*sequence[i]]->iov;
         message.msg_iovlen = 3;
 
@@ -571,6 +578,12 @@ uint16_t send_oob_data(int socket, char oob_char, uint32_t src_ip, uint32_t dst_
     packet->iov[2].iov_len = OUT_OF_BAND_DATA_SIZE;
 
     struct msghdr message;
+    struct sockaddr_in destination;
+    memset(&destination, 0, sizeof(destination));
+    destination.sin_family = AF_INET;
+    destination.sin_addr.s_addr = inet_addr("127.0.0.1");
+    message.msg_name = &destination;
+    message.msg_namelen = sizeof(struct sockaddr_in);
     memset(&message, 0, sizeof(message));
     message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
@@ -611,6 +624,12 @@ uint16_t handle_close(int socket, uint32_t src_ip, uint32_t dst_ip,uint16_t pid)
     packet->iov[1].iov_base = &header;
 
     struct msghdr message;
+    struct sockaddr_in destination;
+    memset(&destination, 0, sizeof(destination));
+    destination.sin_family = AF_INET;
+    destination.sin_addr.s_addr = inet_addr("127.0.0.1");
+    message.msg_name = &destination;
+    message.msg_namelen = sizeof(struct sockaddr_in);
     memset(&message, 0, sizeof(message));
     message.msg_iov = packet->iov;
     message.msg_iovlen = 2;

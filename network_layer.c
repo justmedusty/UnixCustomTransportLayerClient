@@ -1,3 +1,6 @@
+//
+// Created by dustyn on 4/22/24.
+//
 
 #include "network_layer.h"
 
@@ -67,14 +70,17 @@ uint16_t fill_ip_header(struct iphdr *ip_header, uint32_t src_ip, uint32_t dst_i
     ip_header->saddr = src_ip; // Source IP address
     ip_header->daddr = dst_ip; // Destination IP address
 
+
     if(ip_header->saddr == INADDR_ANY|| ip_header->daddr == INADDR_ANY ){
         perror("inet_addr");
         return ERROR;
     }
 
+    get_ip_header_wire_ready(ip_header);
+
     ip_header->check = checksum(ip_header, sizeof(struct iphdr));
 
-    //get_ip_header_wire_ready(ip_header);
+
 
     return SUCCESS;
 
@@ -88,11 +94,13 @@ int16_t compare_ip_checksum(struct iphdr *ip_hdr){
     new_check = checksum(ip_hdr,sizeof (struct iphdr));
 
     if(check != new_check){
+        printf("Check mismatch , check %d new check %d \n",check,new_check);
+        fflush(stdout);
         return -1;
     }
+    ip_hdr->check = new_check;
     return SUCCESS;
 }
-
 
 /*
  * We will need to go through each member and flip the endianness to big endian since this is
