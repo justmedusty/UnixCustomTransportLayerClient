@@ -335,8 +335,12 @@ uint16_t handle_ack(int socket, Packet **packets, uint32_t src_ip, uint32_t dest
             continue;
         }
 
-        Header *header = (Header *)packet->iov[1].iov_base;
 
+        Header *header = (Header *)packet->iov[1].iov_base;
+        if(header->dest_process_id != pid){
+            fprintf(stdout,"Packet for another process\n");
+            free_packet(&packets[i]);
+        }
         sequence_received[header->sequence] = true;
 
         last_received = header->sequence;
@@ -396,6 +400,12 @@ uint16_t send_ack(int socket, uint16_t max_sequence, uint32_t src, uint32_t dest
     memset(&message, 0, sizeof(message));
     message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
+    struct sockaddr_in destination;
+    memset(&destination, 0, sizeof(destination));
+    destination.sin_family = AF_INET;
+    destination.sin_addr.s_addr = inet_addr("127.0.0.1");
+    message.msg_name = &destination;
+    message.msg_namelen = sizeof(struct sockaddr_in);
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
 
@@ -413,7 +423,7 @@ uint16_t send_ack(int socket, uint16_t max_sequence, uint32_t src, uint32_t dest
  */
 uint16_t send_resend(int socket, uint16_t sequence, uint32_t src_ip, uint32_t dst_ip,uint16_t pid) {
 
-    Packet packet;
+    Packet *packet;
 
     allocate_packet(&packet);
 
@@ -426,12 +436,18 @@ uint16_t send_resend(int socket, uint16_t sequence, uint32_t src_ip, uint32_t ds
     };
     struct iphdr ip_hdr;
     fill_ip_header(&ip_hdr, src_ip, dst_ip);
-    packet.iov[0].iov_base = &ip_hdr;
-    packet.iov[1].iov_base = &header;
+    packet->iov[0].iov_base = &ip_hdr;
+    packet->iov[1].iov_base = &header;
 
     struct msghdr message;
+    struct sockaddr_in destination;
+    memset(&destination, 0, sizeof(destination));
+    destination.sin_family = AF_INET;
+    destination.sin_addr.s_addr = inet_addr("127.0.0.1");
+    message.msg_name = &destination;
+    message.msg_namelen = sizeof(struct sockaddr_in);
     memset(&message, 0, sizeof(message));
-    message.msg_iov = packet.iov;
+    message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
@@ -473,10 +489,17 @@ uint16_t handle_corruption(int socket, uint32_t src_ip, uint32_t dst_ip, uint16_
     packet->iov[1].iov_base = &header;
 
 
+
     struct msghdr message;
+    struct sockaddr_in destination;
+    memset(&destination, 0, sizeof(destination));
+    destination.sin_family = AF_INET;
+    destination.sin_addr.s_addr = inet_addr("127.0.0.1");
+    message.msg_name = &destination;
+    message.msg_namelen = sizeof(struct sockaddr_in);
     memset(&message, 0, sizeof(message));
     message.msg_iov = packet->iov;
-    message.msg_iovlen = 1;
+    message.msg_iovlen = 2;
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
     if (bytes_sent < 0) {
@@ -707,8 +730,8 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
  *
  */
 
-uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16_t *packets_to_resend, uint32_t src_ip,
-                              uint32_t dst_ip, uint16_t pid) {
+
+uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip, uint16_t pid) {
     memset(packets_to_resend, 0, MAX_PACKET_COLLECTION);
     int i = 0;
     memset(receiving_packet_list, 0, MAX_PACKET_COLLECTION);
@@ -754,30 +777,37 @@ uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16
 
         allocate_packet(&receiving_packet_list[packets_received]);
 
-        memcpy(receiving_packet_list[packets_received]->iov[0].iov_base, &msg.msg_iov->iov_base, sizeof (struct iphdr));
+        memcpy(receiving_packet_list[packets_received]->iov[0].iov_base, (struct iphdr *) &msg.msg_iov->iov_base[20],
+               20);
         memcpy(receiving_packet_list[packets_received]->iov[1].iov_base, &msg.msg_iov->iov_base[40], 12);
         memcpy(receiving_packet_list[packets_received]->iov[2].iov_base, &msg.msg_iov->iov_base[52], 512);
         head = receiving_packet_list[packets_received]->iov[1].iov_base;
         char buff[PAYLOAD_SIZE];
-        memcpy(&buff,receiving_packet_list[i]->iov[2].iov_base,PAYLOAD_SIZE);
-        printf("%s\n",buff);
+        memcpy(&buff, receiving_packet_list[i]->iov[2].iov_base, PAYLOAD_SIZE);
+        printf("%s\n", buff);
 
 
-        ip_hdr = receiving_packet_list[i]->iov[0].iov_base;
+        ip_hdr = (struct iphdr *) receiving_packet_list[packets_received]->iov[0].iov_base;
         head = receiving_packet_list[i]->iov[1].iov_base;
 
-
-        /*    if (ip_hdr->saddr != dst_ip) {
-                /*
-                 * This is for another IP address, not ours
-                 */
-        //         continue;
-        //       }
+        if (ip_hdr->saddr != dst_ip) {
+            /*
+             * This is for another IP address, not ours
+             */
+            continue;
+        }
 
         if (head->dest_process_id != pid) {
             /*
              * This is for another process, continue the loop
              */
+            continue;
+        }
+
+        if(compare_ip_checksum(ip_hdr) == -1){
+            if (send_resend(socket,head->sequence,src_ip,dst_ip, pid) != SUCCESS){
+                fprintf(stderr,"IP header corrupt, error sending resend request\n");
+            }
             continue;
         }
 
@@ -914,17 +944,16 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
             goto cleanup;
         }
         sleep(5);
-/*
+
 
         // Receive echoed message
         memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
-        packets_received = receive_data_packets(&received_packets[0], socket, failed_packet_seq, src_ip, dest_ip,pid);
+        packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip,pid);
         if (packets_received == ERROR) {
             fprintf(stderr, "Error occurred while receiving packets.\n");
             goto cleanup;
         }
 
-*/
 
     }
 

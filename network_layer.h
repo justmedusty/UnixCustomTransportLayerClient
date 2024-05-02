@@ -16,4 +16,7 @@ uint16_t get_ip_header_wire_ready(struct iphdr (*ip_header));
 
 uint16_t get_ip_header_host_ready(struct iphdr (*ip_header));
 
+int16_t compare_ip_checksum(struct iphdr *ip_hdr);
+
+
 #endif //UNIXCUSTOMTRANSPORTLAYER_NETWORK_LAYER_H

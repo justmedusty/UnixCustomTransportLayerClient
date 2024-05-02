@@ -80,6 +80,20 @@ uint16_t fill_ip_header(struct iphdr *ip_header, uint32_t src_ip, uint32_t dst_i
 
 
 }
+
+int16_t compare_ip_checksum(struct iphdr *ip_hdr){
+    uint16_t check = ip_hdr->check;
+    memset(&ip_hdr->check,0,sizeof(uint16_t));
+    uint16_t new_check;
+    new_check = checksum(ip_hdr,sizeof (struct iphdr));
+
+    if(check != new_check){
+        return -1;
+    }
+    return SUCCESS;
+}
+
+
 /*
  * We will need to go through each member and flip the endianness to big endian since this is
  * the wire format. We will need to convert the endianness before transmission of a packet and after receiving one
