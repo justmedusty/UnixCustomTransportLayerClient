@@ -54,7 +54,7 @@ uint16_t allocate_packet(Packet *packet_ptr[]) {
     if ((*packet_ptr)->iov[0].iov_base == NULL || (*packet_ptr)->iov[1].iov_base == NULL ||
         (*packet_ptr)->iov[2].iov_base == NULL) {
         perror("malloc");
-        free_packet(packet_ptr);
+        free_packet(*packet_ptr);
         return ERROR;
     }
 
@@ -66,32 +66,32 @@ uint16_t allocate_packet(Packet *packet_ptr[]) {
  * Free packet from heap memory, check that it is not null to avoid dereferencing a null pointer, set each packet to null afterwards
  * to make sure there are no double frees.
  */
-uint16_t free_packet(Packet *packet[]) {
-    if (packet == NULL || *packet == NULL) {
+uint16_t free_packet(Packet *packet) {
+    if (packet == NULL) {
         return ERROR;
     }
 
     // Free memory allocated for iov[0]
-    if ((*packet)->iov[0].iov_base != NULL) {
-        free((*packet)->iov[0].iov_base);
-        (*packet)->iov[0].iov_base = NULL;
+    if (packet->iov[0].iov_base != NULL) {
+        free(packet->iov[0].iov_base);
+        packet->iov[0].iov_base = NULL;
     }
 
     // Free memory allocated for iov[1]
-    if ((*packet)->iov[1].iov_base != NULL) {
-        free((*packet)->iov[1].iov_base);
-        (*packet)->iov[1].iov_base = NULL;
+    if (packet->iov[1].iov_base != NULL) {
+        free(packet->iov[1].iov_base);
+        packet->iov[1].iov_base = NULL;
     }
 
     // Free memory allocated for iov[2]
-    if ((*packet)->iov[2].iov_base != NULL) {
-        free((*packet)->iov[2].iov_base);
-        (*packet)->iov[2].iov_base = NULL;
+    if (packet->iov[2].iov_base != NULL) {
+        free(packet->iov[2].iov_base);
+        packet->iov[2].iov_base = NULL;
     }
 
     // Free memory allocated for the Packet structure
-    free(*packet);
-    *packet = NULL; // Set pointer to NULL after freeing memory
+    free(packet);
+    packet = NULL; // Set pointer to NULL after freeing memory
     return SUCCESS;
 }
 
@@ -152,7 +152,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
                 DATA,
                 calculate_checksum(packet[i]->iov[2].iov_base, bytes_to_copy),
                 i,
-                sizeof bytes_to_copy,
+                bytes_to_copy,
                 pid,
                 (packet_array_len - 1)
         };
@@ -328,17 +328,10 @@ uint16_t handle_ack(int socket, Packet *packets[], uint32_t src_ip, uint32_t des
 
         if (packet == NULL) break;
 
-        struct iphdr *ip_hdr = (struct iphdr *)packet->iov[0].iov_base;
-
-        if (ip_hdr->saddr != src_ip) {
-            continue;
-        }
-
-
         Header *header = (Header *)packet->iov[1].iov_base;
         if(header->dest_process_id != pid){
             fprintf(stdout,"Packet for another process\n");
-            free_packet(&packets[i]);
+            free_packet(packets[i]);
         }
         sequence_received[header->sequence] = true;
 
@@ -364,7 +357,7 @@ uint16_t handle_ack(int socket, Packet *packets[], uint32_t src_ip, uint32_t des
         if (send_ack(socket, highest_packet_received, src_ip, dest_ip,pid) != SUCCESS) {
             return ERROR;
         }
-
+        sleep(5);
         reset_timeout();
         return SUCCESS;
 
@@ -453,8 +446,10 @@ uint16_t send_resend(int socket, uint16_t sequence, uint32_t src_ip, uint32_t ds
 
     if (bytes_sent < 0) {
         perror("sendmsg");
+        free_packet(packet);
         return ERROR;
     } else {
+        free_packet(packet);
         return header.sequence;
     }
 
@@ -491,19 +486,21 @@ uint16_t handle_corruption(int socket, uint32_t src_ip, uint32_t dst_ip, uint16_
 
 
     struct msghdr message;
+    memset(&message, 0, sizeof(message));
     struct sockaddr_in destination;
     memset(&destination, 0, sizeof(destination));
     destination.sin_family = AF_INET;
     destination.sin_addr.s_addr = inet_addr("127.0.0.1");
     message.msg_name = &destination;
     message.msg_namelen = sizeof(struct sockaddr_in);
-    memset(&message, 0, sizeof(message));
+
     message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
     ssize_t bytes_sent = sendmsg(socket, &message, 0);
     if (bytes_sent < 0) {
-        free_packet(&packet);
+        perror("sendmsg");
+        free_packet(packet);
         return ERROR;
     } else {
         return header.sequence;
@@ -749,13 +746,14 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
  */
 
 
-uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip, uint16_t pid) {
+uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip, uint16_t pid,uint16_t *status) {
     memset(packets_to_resend, 0, MAX_PACKET_COLLECTION);
-    pid = 1000;
     int i = 0;
     memset(receiving_packet_list, 0, MAX_PACKET_COLLECTION);
     struct msghdr msg;
     struct iovec iov[3];
+
+    pid = 500;
 
 // Initialize the msghdr struct
     msg.msg_name = NULL;
@@ -776,15 +774,18 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
 
     struct iphdr *ip_hdr;
     Header *head;
-    uint16_t return_value = ERROR;
+    uint16_t return_value = SUCCESS;
     int bad_packets = 0;
     int packets_received = 0;
-    ssize_t packets_sniffed = 0;
+    ssize_t packets_sniffed = 1;
 
 
     while (true) {
         packets_sniffed = recvmsg(socket, &msg, 0);
 
+        if(packets_sniffed == 0){
+            break;
+        }
         if (packets_sniffed < 0) {
             perror("recvmsg");
             exit(EXIT_FAILURE);
@@ -796,18 +797,23 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
 
         allocate_packet(&receiving_packet_list[packets_received]);
 
-        memcpy(receiving_packet_list[packets_received]->iov[0].iov_base, (struct iphdr *) &msg.msg_iov->iov_base[20],
-               20);
+        memcpy(receiving_packet_list[packets_received]->iov[0].iov_base, (struct iphdr *) &msg.msg_iov->iov_base[20],20);
         memcpy(receiving_packet_list[packets_received]->iov[1].iov_base, &msg.msg_iov->iov_base[40], 12);
-        memcpy(receiving_packet_list[packets_received]->iov[2].iov_base, &msg.msg_iov->iov_base[52], 512);
+
         head = receiving_packet_list[packets_received]->iov[1].iov_base;
+
         char buff[PAYLOAD_SIZE];
-        memcpy(&buff, receiving_packet_list[i]->iov[2].iov_base, PAYLOAD_SIZE);
-        printf("%s\n", buff);
+        if(head->status == DATA || head->status == SECOND_SEND){
+            memcpy(receiving_packet_list[packets_received]->iov[2].iov_base, &msg.msg_iov->iov_base[52], 512);
+            memcpy(&buff, receiving_packet_list[packets_received]->iov[2].iov_base, head->msg_size);
+            printf("%s\n", buff);
+            fflush(stdout);
+        }
+
 
 
         ip_hdr = (struct iphdr *) receiving_packet_list[packets_received]->iov[0].iov_base;
-        head = receiving_packet_list[i]->iov[1].iov_base;
+        head = receiving_packet_list[packets_received]->iov[1].iov_base;
 
         if (ip_hdr->saddr != dst_ip) {
             /*
@@ -816,7 +822,7 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
             continue;
         }
 
-        if (head->dest_process_id != pid) {
+        if (head->dest_process_id != 500) {
             /*
              * This is for another process, continue the loop
              */
@@ -829,13 +835,16 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
             }
             continue;
         }
+        printf("%d sequence \n",head->sequence);
+        fflush(stdout);
 
 
         char data[head->msg_size];
 
-        if (head->packet_end == head->sequence &&
-            (return_value = handle_ack(socket, receiving_packet_list, src_ip, dst_ip, pid)) == SUCCESS) {
-            *receiving_packet_list[i] = *(Packet *) &msg;
+        if ((head->status == DATA || head->status == SECOND_SEND) && (head->packet_end == head->sequence &&
+                                                                      (return_value = handle_ack(socket, receiving_packet_list, src_ip, dst_ip, pid)) == SUCCESS)){
+            printf("got last packet successfully\n");
+            fflush(stdout);
             return SUCCESS;
         } else {
             if (return_value == ERROR) {
@@ -850,13 +859,14 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                     write(1,"OOB\n",4);
                     oob_data = data[0];
                     raise(SIGINT);
+                    *status = OOB;
                     break;
 
                 case CLOSE:
                     write(1,"CLOSE\n",6);
                     close(socket);
                     reset_timeout();
-                    return CLOSE;
+                    *status = CLOSE;
 
                 case CORRUPTION :
                     packets_to_resend[++bad_packets] = head->sequence;
@@ -874,7 +884,8 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                 case ACKNOWLEDGE:
                     write(1,"ACK\n",4);
                     reset_timeout();
-                    return RECEIVED_ACK;
+                    *status = RECEIVED_ACK;
+                    break;
 
 
                 case SECOND_SEND :
@@ -888,7 +899,6 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                     break;
 
                 case DATA:
-                    printf("DATA\n");
                     if (compare_checksum(data, head->msg_size, head->checksum) != SUCCESS) {
                         memset(&receiving_packet_list[head->sequence], 0, sizeof(Packet));
                         handle_corruption(socket, src_ip, dst_ip, head->sequence, pid);
@@ -898,6 +908,12 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                     break;
 
             }
+            if(*status == RECEIVED_ACK || *status == CLOSE || *status == OOB ){
+                break;
+            }
+        }
+        if(*status == RECEIVED_ACK || *status == CLOSE || *status == OOB ){
+            break;
         }
         packets_received++;
     }
@@ -951,11 +967,10 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     uint16_t failed_packets = 0;
     uint16_t packets_received = 0;
     uint16_t packets_made = 0;
-
+    strcpy(msg_buff,"hellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfov\0");
+    uint16_t status = 0;
     while (true) {
 
-        strcpy(msg_buff,"hellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfov\0");
-        printf("%lu\n",(strlen(msg_buff) / 512 ));
         if ((packets_made = packetize_data(packets,  msg_buff, (strlen(msg_buff) / 512 ), src_ip, dest_ip, pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
             exit(EXIT_FAILURE);
@@ -967,16 +982,21 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
             fprintf(stderr, "Error occurred while sending echoed packets.\n");
             goto cleanup;
         }
-        sleep(5);
 
 
-        // Receive echoed message
-        memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
-        packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip,pid);
-        if (packets_received == ERROR) {
-            fprintf(stderr, "Error occurred while receiving packets.\n");
-            goto cleanup;
+        while(status != RECEIVED_ACK && status != CLOSE){
+
+            // Receive echoed message
+            memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
+            packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip,pid,&status);
+            if (packets_received == ERROR) {
+                fprintf(stderr, "Error occurred while receiving packets.\n");
+                goto cleanup;
+            }
         }
+        status = 0;
+
+
 
 
     }
