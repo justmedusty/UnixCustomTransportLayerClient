@@ -27,7 +27,7 @@ uint16_t num_timeouts;
 char oob_data;
 
 
-uint16_t allocate_packet(Packet **packet_ptr) {
+uint16_t allocate_packet(Packet *packet_ptr[]) {
     *packet_ptr = malloc(sizeof(Packet)); // Assign allocated memory to the pointer via dereferencing
 
     if (*packet_ptr == NULL) {
@@ -66,7 +66,7 @@ uint16_t allocate_packet(Packet **packet_ptr) {
  * Free packet from heap memory, check that it is not null to avoid dereferencing a null pointer, set each packet to null afterwards
  * to make sure there are no double frees.
  */
-uint16_t free_packet(Packet **packet) {
+uint16_t free_packet(Packet *packet[]) {
     if (packet == NULL || *packet == NULL) {
         return ERROR;
     }
@@ -104,8 +104,7 @@ uint16_t free_packet(Packet **packet) {
  * include proper message size, provide a checksum for the data, fill in the layer 3 header.
  *
  */
-uint16_t
-packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
+uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
     //Check they are not passing a packet array larger than the max
     if (packet_array_len > MAX_PACKET_COLLECTION) {
         return ERROR;
@@ -125,7 +124,7 @@ packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uin
      */
 
 
-    for (int i = 0; i < packet_array_len; ++i) {
+    for (int i = 0; i < packet_array_len; i++) {
         allocate_packet(&packet[i]);
 
         char packet_buff[PAYLOAD_SIZE];
@@ -154,7 +153,8 @@ packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uin
                 calculate_checksum(packet[i]->iov[2].iov_base, bytes_to_copy),
                 i,
                 sizeof bytes_to_copy,
-                pid
+                pid,
+                (packet_array_len - 1)
         };
 
         memcpy(packet[i]->iov[1].iov_base,&header, HEADER_SIZE);
@@ -162,7 +162,7 @@ packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uin
 
 
 
-        packets_filled = i + 1;
+        packets_filled = i;
 
 
     }
@@ -315,7 +315,7 @@ uint8_t compare_checksum(char data[], size_t length, uint16_t received_checksum)
  * Also sending out RESEND messages to the other side with the packet sequence number that will need to be sent back.
  */
 
-uint16_t handle_ack(int socket, Packet **packets, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
+uint16_t handle_ack(int socket, Packet *packets[], uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
 
     bool sequence_received[MAX_PACKET_COLLECTION + 1] = {false}; // Initialize all to false
     int last_received = -1;
@@ -520,7 +520,7 @@ uint16_t handle_corruption(int socket, uint32_t src_ip, uint32_t dst_ip, uint16_
  * sent.
  */
 
-uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_packets, Packet **packet_collection,uint16_t pid) {
+uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_packets, Packet *packet_collection[],uint16_t pid) {
 
 
     for (int i = 0; i < num_packets; i++) {
@@ -749,7 +749,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
  */
 
 
-uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip, uint16_t pid) {
+uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip, uint16_t pid) {
     memset(packets_to_resend, 0, MAX_PACKET_COLLECTION);
     pid = 1000;
     int i = 0;
@@ -954,15 +954,15 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
 
     while (true) {
 
-        strcpy(msg_buff,"hellothisisatestpacketofsomeinfo\0");
-
-        if ((packets_made = packetize_data(packets,msg_buff,1,src_ip,dest_ip,pid)) == ERROR){
+        strcpy(msg_buff,"hellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfov\0");
+        printf("%lu\n",(strlen(msg_buff) / 512 ));
+        if ((packets_made = packetize_data(packets,  msg_buff, (strlen(msg_buff) / 512 ), src_ip, dest_ip, pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
             exit(EXIT_FAILURE);
         }
 
         // Echo the received message back to the client
-        failed_packets = send_packet_collection(socket, 1, packets, failed_packet_seq,pid,src_ip, inet_addr("127.0.0.1"));
+        failed_packets = send_packet_collection(socket, (strlen(msg_buff) / 512 ), packets, failed_packet_seq,pid,src_ip, inet_addr("127.0.0.1"));
         if (failed_packets != SUCCESS) {
             fprintf(stderr, "Error occurred while sending echoed packets.\n");
             goto cleanup;
