@@ -18,7 +18,7 @@ int main() {
     }
 
     printf("getting ready to connect\n");
-    handle_client_connection(sockfd, inet_addr("127.0.0.1"),inet_addr("127.0.0.1"),500);
+    handle_client_connection(sockfd, inet_addr("127.0.0.1"),inet_addr("127.0.0.1"),1000);
 
     close(sockfd);
     return 0;

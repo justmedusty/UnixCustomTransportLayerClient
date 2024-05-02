@@ -106,7 +106,6 @@ uint16_t free_packet(Packet **packet) {
  */
 uint16_t
 packetize_data(Packet **packet, char data_buff[], uint16_t packet_array_len, uint32_t src_ip, uint32_t dest_ip,uint16_t pid) {
-
     //Check they are not passing a packet array larger than the max
     if (packet_array_len > MAX_PACKET_COLLECTION) {
         return ERROR;
@@ -752,6 +751,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
 
 uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16_t *packets_to_resend, uint32_t src_ip,uint32_t dst_ip, uint16_t pid) {
     memset(packets_to_resend, 0, MAX_PACKET_COLLECTION);
+    pid = 1000;
     int i = 0;
     memset(receiving_packet_list, 0, MAX_PACKET_COLLECTION);
     struct msghdr msg;
@@ -847,11 +847,13 @@ uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16
                  * We'll send an interrupt signal when OOB data is discovered
                  */
                 case OOB:
+                    write(1,"OOB\n",4);
                     oob_data = data[0];
                     raise(SIGINT);
                     break;
 
                 case CLOSE:
+                    write(1,"CLOSE\n",6);
                     close(socket);
                     reset_timeout();
                     return CLOSE;
@@ -863,17 +865,20 @@ uint16_t receive_data_packets(Packet **receiving_packet_list, int socket, uint16
 
 
                 case RESEND :
+                    write(1,"RESENDREQ\n",10);
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
                     break;
 
 
                 case ACKNOWLEDGE:
+                    write(1,"ACK\n",4);
                     reset_timeout();
                     return RECEIVED_ACK;
 
 
                 case SECOND_SEND :
+                    write(1,"RESEND\n",7);
                     if (compare_checksum(data, head->msg_size, head->checksum) != SUCCESS) {
                         memset(&receiving_packet_list[head->sequence], 0, sizeof(Packet));
                         handle_corruption(socket, src_ip, dst_ip, head->sequence, pid);
