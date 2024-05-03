@@ -610,7 +610,7 @@ uint16_t handle_close(int socket, uint32_t src_ip, uint32_t dst_ip,uint16_t pid)
             0,
             0,
             0,
-            ERROR
+            pid
     };
 
 
@@ -620,13 +620,13 @@ uint16_t handle_close(int socket, uint32_t src_ip, uint32_t dst_ip,uint16_t pid)
     packet->iov[1].iov_base = &header;
 
     struct msghdr message;
+    memset(&message, 0, sizeof(message));
     struct sockaddr_in destination;
     memset(&destination, 0, sizeof(destination));
     destination.sin_family = AF_INET;
     destination.sin_addr.s_addr = inet_addr("127.0.0.1");
     message.msg_name = &destination;
     message.msg_namelen = sizeof(struct sockaddr_in);
-    memset(&message, 0, sizeof(message));
     message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
@@ -970,12 +970,14 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     uint16_t failed_packets = 0;
     uint16_t packets_received = 0;
     uint16_t packets_made = 0;
-    strcpy(msg_buff,"hertahgadtfhadthaedthaedthaetdtrhwsrhjwtyhjsdtyrjtyjtyjtyjtyjhtyjhtjyhh\0");
 
     uint16_t status = 0;
     while (true) {
 
         fgets(msg_buff, sizeof(msg_buff), stdin);
+        if(strcmp(msg_buff,"close\n") == 0){
+            handle_close(socket,src_ip,dest_ip,pid);
+        }
         uint16_t packet_len = (strlen(msg_buff) > PAYLOAD_SIZE) ? (strlen(msg_buff) / 512 ) : 1;
         if ((packets_made = packetize_data(packets,  msg_buff, packet_len, src_ip, dest_ip, pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
