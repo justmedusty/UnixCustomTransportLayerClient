@@ -330,7 +330,6 @@ uint16_t handle_ack(int socket, Packet *packets[], uint32_t src_ip, uint32_t des
 
         Header *header = (Header *)packet->iov[1].iov_base;
         if(header->dest_process_id != pid){
-            fprintf(stdout,"Packet for another process\n");
             free_packet(packets[i]);
         }
         sequence_received[header->sequence] = true;
@@ -793,7 +792,6 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
         if (msg.msg_iovlen > PACKET_SIZE) {
             continue;
         }
-        fprintf(stdout, "Receiving msg\n");
 
         allocate_packet(&receiving_packet_list[packets_received]);
 
@@ -802,7 +800,6 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
         ip_hdr = (struct iphdr *) receiving_packet_list[packets_received]->iov[0].iov_base;
         head = receiving_packet_list[packets_received]->iov[1].iov_base;
         if (head->dest_process_id != 500) {
-            printf("Not for this process\n");
             fflush(stdout);
             free_packet(receiving_packet_list[packets_received]);
             /*
@@ -957,7 +954,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     Packet *packets[MAX_PACKET_COLLECTION];
     Packet *received_packets[MAX_PACKET_COLLECTION];
 
-    char msg_buff[4096];
+    char msg_buff[50000];
     signal(SIGINT, sig_int_handler);
     signal(SIGALRM, sigalrm_handler);
 
