@@ -144,8 +144,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
         */
         size_t bytes_to_copy = remaining_bytes > PAYLOAD_SIZE ? PAYLOAD_SIZE : remaining_bytes;
         memcpy(packet_buff, data_buff + (source_length - remaining_bytes), bytes_to_copy);
-        // segfault mania  memcpy(packet[i].iov[2].iov_base, packet_buff, bytes_to_copy);
-        packet[i]->iov[2].iov_base = packet_buff;
+        memcpy(packet[i]->iov[2].iov_base, packet_buff, bytes_to_copy);
         remaining_bytes -= bytes_to_copy;
 
         Header header = {
