@@ -124,7 +124,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
      */
 
 
-    for (int i = 0; i < packet_array_len; i++) {
+    for (int i = 0; i < packet_array_len + 1; i++) {
         allocate_packet(&packet[i]);
 
         char packet_buff[PAYLOAD_SIZE];
@@ -693,7 +693,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Set the destination IP address here
 
-    for (int i = 0; i < num_packets; i++) {
+    for (int i = 0; i < (num_packets + 1); i++) {
         struct msghdr msg_hdr;
         memset(&msg_hdr, 0, sizeof(msg_hdr));
 
@@ -799,8 +799,17 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
 
         memcpy(receiving_packet_list[packets_received]->iov[0].iov_base, (struct iphdr *) &msg.msg_iov->iov_base[20],20);
         memcpy(receiving_packet_list[packets_received]->iov[1].iov_base, &msg.msg_iov->iov_base[40], 12);
-
+        ip_hdr = (struct iphdr *) receiving_packet_list[packets_received]->iov[0].iov_base;
         head = receiving_packet_list[packets_received]->iov[1].iov_base;
+        if (head->dest_process_id != 500) {
+            printf("Not for this process\n");
+            fflush(stdout);
+            free_packet(receiving_packet_list[packets_received]);
+            /*
+             * This is for another process, continue the loop
+             */
+            continue;
+        }
 
         char buff[PAYLOAD_SIZE];
         if(head->status == DATA || head->status == SECOND_SEND){
@@ -812,8 +821,7 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
 
 
 
-        ip_hdr = (struct iphdr *) receiving_packet_list[packets_received]->iov[0].iov_base;
-        head = receiving_packet_list[packets_received]->iov[1].iov_base;
+
 
         if (ip_hdr->saddr != dst_ip) {
             /*
@@ -822,12 +830,7 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
             continue;
         }
 
-        if (head->dest_process_id != 500) {
-            /*
-             * This is for another process, continue the loop
-             */
-            continue;
-        }
+
 
         if(compare_ip_checksum(ip_hdr) == -1){
             if (send_resend(socket,head->sequence,src_ip,dst_ip, pid) != SUCCESS){
@@ -967,11 +970,14 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     uint16_t failed_packets = 0;
     uint16_t packets_received = 0;
     uint16_t packets_made = 0;
-    strcpy(msg_buff,"hellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfohellothisisatestpacketofsomeinfov\0");
+    strcpy(msg_buff,"hertahgadtfhadthaedthaedthaetdtrhwsrhjwtyhjsdtyrjtyjtyjtyjtyjhtyjhtjyhh\0");
+
     uint16_t status = 0;
     while (true) {
 
-        if ((packets_made = packetize_data(packets,  msg_buff, (strlen(msg_buff) / 512 ), src_ip, dest_ip, pid)) == ERROR){
+        fgets(msg_buff, sizeof(msg_buff), stdin);
+        uint16_t packet_len = (strlen(msg_buff) > PAYLOAD_SIZE) ? (strlen(msg_buff) / 512 ) : 1;
+        if ((packets_made = packetize_data(packets,  msg_buff, packet_len, src_ip, dest_ip, pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
             exit(EXIT_FAILURE);
         }
