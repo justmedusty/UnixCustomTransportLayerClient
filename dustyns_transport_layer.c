@@ -124,7 +124,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
      */
 
 
-    for (int i = 0; i < packet_array_len; i++) {
+    for (int i = 0; i < packet_array_len + 1; i++) {
         allocate_packet(&packet[i]);
 
         char packet_buff[PAYLOAD_SIZE];
@@ -685,6 +685,7 @@ void get_transport_packet_host_ready(struct iovec iov[3]) {
 uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[PACKET_SIZE], uint16_t pid,uint32_t src_ip, uint32_t dest_ip) {
     memset(failed_packet_seq, 0, PACKET_SIZE);
     int failed_packets = 0;
+    num_packets++;
 
     // Prepare destination address
     struct sockaddr_in dest_addr;
@@ -692,7 +693,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Set the destination IP address here
 
-    for (int i = 0; i < (num_packets + 1); i++) {
+    for (int i = 0; i < num_packets; i++) {
         struct msghdr msg_hdr;
         memset(&msg_hdr, 0, sizeof(msg_hdr));
 
@@ -955,7 +956,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     Packet *packets[MAX_PACKET_COLLECTION];
     Packet *received_packets[MAX_PACKET_COLLECTION];
 
-    char msg_buff[50000];
+    char msg_buff[512000];
     signal(SIGINT, sig_int_handler);
     signal(SIGALRM, sigalrm_handler);
 
