@@ -879,6 +879,9 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                     break;
 
                 case CORRUPTION :
+                    if(head->sequence > MAX_PACKET_COLLECTION ){
+                        handle_close(socket,src_ip,dst_ip,pid);
+                    }
                     write(1, "CORRUPTION\n", 11);
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
@@ -887,6 +890,9 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
 
                 case RESEND :
                     write(1, "RESENDREQ\n", 10);
+                    if(head->sequence > MAX_PACKET_COLLECTION ){
+                        handle_close(socket,src_ip,dst_ip,pid);
+                    }
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
                     break;
