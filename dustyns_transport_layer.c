@@ -148,6 +148,9 @@ packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, ui
         memcpy(packet_buff, data_buff + (source_length - remaining_bytes), bytes_to_copy);
         memcpy(packet[i]->iov[2].iov_base, packet_buff, bytes_to_copy);
         remaining_bytes -= bytes_to_copy;
+        if(packet_array_len == 1){
+            packet_array_len = 0;
+        }
 
         Header header = {
                 DATA,
@@ -717,7 +720,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
             // Store the sequence number of the failed packet
             failed_packet_seq[failed_packets - 1] = i;
         }
-       usleep(25);
+      usleep(25);
     }
 
     // Set packet timeout and return the number of failed packets
