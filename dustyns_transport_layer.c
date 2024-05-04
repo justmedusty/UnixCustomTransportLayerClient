@@ -153,7 +153,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
                 i,
                 bytes_to_copy,
                 pid,
-                (packet_array_len - 1)
+                packet_array_len - 1
         };
 
         memcpy(packet[i]->iov[1].iov_base,&header, HEADER_SIZE);
@@ -573,12 +573,13 @@ uint16_t send_oob_data(int socket, char oob_char, uint32_t src_ip, uint32_t dst_
 
     struct msghdr message;
     struct sockaddr_in destination;
+    memset(&message, 0, sizeof(message));
     memset(&destination, 0, sizeof(destination));
     destination.sin_family = AF_INET;
     destination.sin_addr.s_addr = inet_addr("127.0.0.1");
     message.msg_name = &destination;
     message.msg_namelen = sizeof(struct sockaddr_in);
-    memset(&message, 0, sizeof(message));
+
     message.msg_iov = packet->iov;
     message.msg_iovlen = 2;
 
@@ -798,6 +799,7 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
         memcpy(receiving_packet_list[packets_received]->iov[1].iov_base, &msg.msg_iov->iov_base[40], 12);
         ip_hdr = (struct iphdr *) receiving_packet_list[packets_received]->iov[0].iov_base;
         head = receiving_packet_list[packets_received]->iov[1].iov_base;
+
         if (head->dest_process_id != 500) {
             fflush(stdout);
             free_packet(receiving_packet_list[packets_received]);
@@ -974,6 +976,9 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
         if(strcmp(msg_buff,"close\n") == 0){
             handle_close(socket,src_ip,dest_ip,pid);
         }
+        if(strcmp(msg_buff,"o\n") == 0){
+            send_oob_data(socket,msg_buff[0],src_ip,dest_ip,pid);
+        }
         uint16_t packet_len = (strlen(msg_buff) > PAYLOAD_SIZE) ? (strlen(msg_buff) / 512 ) : 1;
         if ((packets_made = packetize_data(packets,  msg_buff, packet_len, src_ip, dest_ip, pid)) == ERROR){
             fprintf(stderr,"ERROR PACKETIZING\n");
@@ -1010,8 +1015,13 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     cleanup:
 
     // Handle connection close
-    if (handle_close(socket, src_ip, dest_ip,pid) == ERROR) {
-        fprintf(stderr, "Error occurred while handling connection close.\n");
+    for(int i=0;i < MAX_PACKET_COLLECTION;i++){
+        free(packets[i]);
+    }
+    if(status != CLOSE){
+        if (handle_close(socket, src_ip, dest_ip, pid) != SUCCESS) {
+            fprintf(stderr, "Error occurred while handling connection close.\n");
+        }
     }
 
     close(socket);
