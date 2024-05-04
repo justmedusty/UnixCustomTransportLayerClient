@@ -124,7 +124,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
      */
 
 
-    for (int i = 0; i < packet_array_len + 1; i++) {
+    for (int i = 0; i < packet_array_len; i++) {
         allocate_packet(&packet[i]);
 
         char packet_buff[PAYLOAD_SIZE];
@@ -153,7 +153,7 @@ uint16_t packetize_data(Packet *packet[], char data_buff[], uint16_t packet_arra
                 i,
                 bytes_to_copy,
                 pid,
-                packet_array_len - 1
+                (packet_array_len - 1)
         };
 
         memcpy(packet[i]->iov[1].iov_base,&header, HEADER_SIZE);
@@ -973,9 +973,11 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip,uint
     while (true) {
 
         fgets(msg_buff, sizeof(msg_buff), stdin);
+
         if(strcmp(msg_buff,"close\n") == 0){
             handle_close(socket,src_ip,dest_ip,pid);
         }
+
         if(strcmp(msg_buff,"o\n") == 0){
             send_oob_data(socket,msg_buff[0],src_ip,dest_ip,pid);
         }
