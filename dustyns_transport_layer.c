@@ -155,7 +155,7 @@ packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, ui
                 i,
                 bytes_to_copy,
                 pid,
-                (packet_array_len - 1)
+                (packet_array_len)
         };
 
         memcpy(packet[i]->iov[1].iov_base, &header, HEADER_SIZE);
@@ -717,6 +717,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
             // Store the sequence number of the failed packet
             failed_packet_seq[failed_packets - 1] = i;
         }
+       usleep(25);
     }
 
     // Set packet timeout and return the number of failed packets
@@ -876,7 +877,7 @@ uint16_t receive_data_packets(Packet *packet_list[],Packet *receiving_packet_lis
                         handle_close(socket,src_ip,dst_ip,pid);
                     }
                     write(1, "CORRUPTION\n", 11);
-                    send_missing_packet(socket,packet_list[head->sequence],pid);
+                    send_missing_packet(socket,&packet_list[head->sequence],pid);
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
                     break;
@@ -887,7 +888,7 @@ uint16_t receive_data_packets(Packet *packet_list[],Packet *receiving_packet_lis
                     if(head->sequence > MAX_PACKET_COLLECTION ){
                         handle_close(socket,src_ip,dst_ip,pid);
                     }
-                    send_missing_packet(socket,packet_list[head->sequence],pid);
+                    send_missing_packet(socket,&packet_list[head->sequence],pid);
 
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
