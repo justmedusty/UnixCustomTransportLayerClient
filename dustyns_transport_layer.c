@@ -518,16 +518,13 @@ uint16_t handle_corruption(int socket, uint32_t src_ip, uint32_t dst_ip, uint16_
  * sent.
  */
 
-uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_packets, Packet *packet_collection[],
-                              uint16_t pid) {
+uint16_t send_missing_packet(int socket, Packet *packet,uint16_t pid) {
 
-
-    for (int i = 0; i < num_packets; i++) {
 
         Header header;
-        header = *((Header *) packet_collection[*sequence[i]]->iov[1].iov_base);
+        header = *((Header *) packet->iov[1].iov_base);
         header.status = SECOND_SEND;
-        packet_collection[*sequence[i]]->iov[1].iov_base = &header;
+        packet->iov[1].iov_base = &header;
         struct msghdr message;
         memset(&message, 0, sizeof(message));
         struct sockaddr_in destination;
@@ -536,18 +533,16 @@ uint16_t send_missing_packets(int socket, uint16_t *sequence[], uint16_t num_pac
         destination.sin_addr.s_addr = inet_addr("127.0.0.1");
         message.msg_name = &destination;
         message.msg_namelen = sizeof(struct sockaddr_in);
-        message.msg_iov = packet_collection[*sequence[i]]->iov;
+        message.msg_iov = packet->iov;
         message.msg_iovlen = 3;
 
         ssize_t bytes_sent = sendmsg(socket, &message, 0);
 
         if (bytes_sent < 0) {
-            return *sequence[i];
+            return ERROR;
         } else {
-            continue;
+            return SUCCESS;
         }
-    }
-    return SUCCESS;
 }
 
 /*
@@ -686,8 +681,7 @@ void get_transport_packet_host_ready(struct iovec iov[3]) {
  */
 
 
-uint16_t
-send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[PACKET_SIZE],
+uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint16_t failed_packet_seq[PACKET_SIZE],
                        uint16_t pid, uint32_t src_ip, uint32_t dest_ip) {
     memset(failed_packet_seq, 0, PACKET_SIZE);
     int failed_packets = 0;
@@ -752,7 +746,7 @@ send_packet_collection(int socket, uint16_t num_packets, Packet *packets[], uint
  */
 
 
-uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint16_t *packets_to_resend, uint32_t src_ip,
+uint16_t receive_data_packets(Packet *packet_list[],Packet *receiving_packet_list[], int socket, uint16_t *packets_to_resend, uint32_t src_ip,
                               uint32_t dst_ip, uint16_t pid, uint16_t *status) {
     memset(packets_to_resend, 0, MAX_PACKET_COLLECTION);
     int i = 0;
@@ -847,11 +841,10 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
 
         char data[head->msg_size];
 
-        if ((head->status == DATA || head->status == SECOND_SEND) && (head->packet_end == head->sequence &&
-                                                                      (return_value = handle_ack(socket,
-                                                                                                 receiving_packet_list,
-                                                                                                 src_ip, dst_ip,
-                                                                                                 pid)) == SUCCESS)) {
+        if ((head->status == DATA ||
+        head->status == SECOND_SEND) &&
+        (head->packet_end == head->sequence &&
+        (return_value = handle_ack(socket,receiving_packet_list,src_ip, dst_ip,pid)) == SUCCESS)) {
             printf("got last packet successfully\n");
             fflush(stdout);
             return SUCCESS;
@@ -883,6 +876,7 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                         handle_close(socket,src_ip,dst_ip,pid);
                     }
                     write(1, "CORRUPTION\n", 11);
+                    send_missing_packet(socket,packet_list[head->sequence],pid);
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
                     break;
@@ -893,6 +887,8 @@ uint16_t receive_data_packets(Packet *receiving_packet_list[], int socket, uint1
                     if(head->sequence > MAX_PACKET_COLLECTION ){
                         handle_close(socket,src_ip,dst_ip,pid);
                     }
+                    send_missing_packet(socket,packet_list[head->sequence],pid);
+
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
                     break;
@@ -1026,7 +1022,7 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip, uin
 
             // Receive echoed message
             memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
-            packets_received = receive_data_packets(received_packets, socket, failed_packet_seq, src_ip, dest_ip, pid,&status);
+            packets_received = receive_data_packets(packets,received_packets, socket, failed_packet_seq, src_ip, dest_ip, pid,&status);
             if (packets_received == ERROR) {
                 fprintf(stderr, "Error occurred while receiving packets.\n");
                 goto cleanup;
