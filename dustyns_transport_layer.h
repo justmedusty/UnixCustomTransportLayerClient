@@ -102,5 +102,5 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
 
 uint16_t dump_packet_collection_payload_into_buffer(Packet *packet[], char data_buff[], uint64_t buff_size,uint16_t packet_array_len);
 
-void get_transport_packet_wire_ready(struct iovec *iov[3]);
+void get_transport_packet_wire_ready(struct iovec *iov);
 #endif //UNIXCUSTOMTRANSPORTLAYER_DUSTYNS_TRANSPORT_LAYER_H

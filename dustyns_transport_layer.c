@@ -155,15 +155,16 @@ packetize_data(Packet *packet[], char data_buff[], uint16_t packet_array_len, ui
         Header header = {
                 DATA,
                 calculate_checksum(packet[i]->iov[2].iov_base, bytes_to_copy),
+
                 i,
                 bytes_to_copy,
                 pid,
                 (packet_array_len)
         };
 
+
         memcpy(packet[i]->iov[1].iov_base, &header, HEADER_SIZE);
         memcpy(packet[i]->iov[0].iov_base, &ip_hdr, sizeof(struct iphdr));
-
 
         packets_filled = i;
 
@@ -649,14 +650,15 @@ uint16_t handle_close(int socket, uint32_t src_ip, uint32_t dst_ip, uint16_t pid
  * (probably gonna toss these)
  */
 
-void get_transport_packet_wire_ready(struct iovec *iov[3]) {
+void get_transport_packet_wire_ready(struct iovec *iov) {
 
-    Header *header = (Header *) &iov[1]->iov_base;
+    Header *header = (Header *) &iov->iov_base;
     header->sequence = htons(header->sequence);
     header->checksum = htons(header->checksum);
     header->msg_size = htons(header->msg_size);
+    header->dest_process_id = htons(header->dest_process_id);
 
-    iov[1]->iov_base = header;
+    iov->iov_base = header;
 }
 
 
@@ -666,6 +668,7 @@ void get_transport_packet_host_ready(struct iovec iov[3]) {
     header->sequence = ntohs(header->sequence);
     header->checksum = ntohs(header->checksum);
     header->msg_size = ntohs(header->msg_size);
+    header->dest_process_id = ntohs(header->dest_process_id);
 
     iov[1].iov_base = header;
 
@@ -711,7 +714,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
         // Populate msghdr
         msg_hdr.msg_iov = packets[i]->iov;
         msg_hdr.msg_iovlen = 3; // Number of iovs
-        Header *head = packets[i]->iov[1].iov_base;
+      //  Header *head = packets[i]->iov[1].iov_base;
 
         // Send the packet
         if (sendmsg(socket, &msg_hdr, 0) == -1) {
@@ -720,7 +723,7 @@ uint16_t send_packet_collection(int socket, uint16_t num_packets, Packet *packet
             // Store the sequence number of the failed packet
             failed_packet_seq[failed_packets - 1] = i;
         }
-      usleep(25);
+      usleep(20);
     }
 
     // Set packet timeout and return the number of failed packets
@@ -880,7 +883,7 @@ uint16_t receive_data_packets(Packet *packet_list[],Packet *receiving_packet_lis
                         handle_close(socket,src_ip,dst_ip,pid);
                     }
                     write(1, "CORRUPTION\n", 11);
-                    send_missing_packet(socket,&packet_list[head->sequence],pid);
+                    send_missing_packet(socket,packet_list[head->sequence],pid);
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
                     break;
@@ -891,7 +894,7 @@ uint16_t receive_data_packets(Packet *packet_list[],Packet *receiving_packet_lis
                     if(head->sequence > MAX_PACKET_COLLECTION ){
                         handle_close(socket,src_ip,dst_ip,pid);
                     }
-                    send_missing_packet(socket,&packet_list[head->sequence],pid);
+                    send_missing_packet(socket,packet_list[head->sequence],pid);
 
                     packets_to_resend[++bad_packets] = head->sequence;
                     bad_packets++;
