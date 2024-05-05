@@ -788,7 +788,7 @@ uint16_t receive_data_packets(Packet *packet_list[],Packet *receiving_packet_lis
     ssize_t packets_sniffed = 1;
 
 
-    while (true) {
+    while (SIG_ALARM == 0) {
         packets_sniffed = recvmsg(socket, &msg, 0);
 
         if (packets_sniffed == 0) {
@@ -1026,15 +1026,19 @@ void handle_client_connection(int socket, uint32_t src_ip, uint32_t dest_ip, uin
                 }
 
             }
-
+         if(SIG_ALARM != 0) {
+             continue;
+         }
             // Receive echoed message
             memset(&failed_packet_seq, 0, MAX_PACKET_COLLECTION);
-            packets_received = receive_data_packets(packets,received_packets, socket, failed_packet_seq, src_ip, dest_ip, pid,&status);
+            packets_received = receive_data_packets(packets, received_packets, socket, failed_packet_seq, src_ip,
+                                                    dest_ip, pid, &status);
             if (packets_received == ERROR) {
                 fprintf(stderr, "Error occurred while receiving packets.\n");
                 goto cleanup;
-            }
+
         }
+    }
         status = 0;
 
 
